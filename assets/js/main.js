@@ -1,31 +1,32 @@
 document.documentElement.classList.add('js');
 
 document.addEventListener('DOMContentLoaded', () => {
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const header = document.querySelector('.site-header');
   const menuBtn = document.querySelector('.menu-btn');
   const nav = document.querySelector('.nav');
+
   const setHeader = () => header?.classList.toggle('scrolled', scrollY > 24);
-  const closeMenu = (returnFocus = false) => {
-    menuBtn?.setAttribute('aria-expanded', 'false');
-    nav?.classList.remove('open');
-    document.body.classList.remove('menu-open');
+  const setMenuState = (open, returnFocus = false) => {
+    menuBtn?.setAttribute('aria-expanded', String(open));
+    menuBtn?.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню');
+    nav?.classList.toggle('open', open);
+    document.body.classList.toggle('menu-open', open);
     if (returnFocus) menuBtn?.focus();
   };
 
   setHeader();
   addEventListener('scroll', setHeader, { passive: true });
-  menuBtn?.addEventListener('click', () => {
-    const open = menuBtn.getAttribute('aria-expanded') !== 'true';
-    menuBtn.setAttribute('aria-expanded', String(open));
-    nav?.classList.toggle('open', open);
-    document.body.classList.toggle('menu-open', open);
-  });
-  nav?.querySelectorAll('a').forEach(link => link.addEventListener('click', () => closeMenu()));
+  menuBtn?.addEventListener('click', () => setMenuState(menuBtn.getAttribute('aria-expanded') !== 'true'));
+  nav?.querySelectorAll('a').forEach(link => link.addEventListener('click', () => setMenuState(false)));
   addEventListener('keydown', event => {
-    if (event.key === 'Escape' && menuBtn?.getAttribute('aria-expanded') === 'true') closeMenu(true);
+    if (event.key === 'Escape' && menuBtn?.getAttribute('aria-expanded') === 'true') setMenuState(false, true);
+  });
+  addEventListener('resize', () => {
+    if (innerWidth > 960 && menuBtn?.getAttribute('aria-expanded') === 'true') setMenuState(false);
   });
 
-  if ('IntersectionObserver' in window) {
+  if (!reducedMotion && 'IntersectionObserver' in window) {
     const reveal = new IntersectionObserver(entries => entries.forEach(entry => {
       if (entry.isIntersecting) {
         entry.target.classList.add('visible');
@@ -48,7 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     requestAnimationFrame(run);
   };
-  if ('IntersectionObserver' in window) {
+
+  if (!reducedMotion && 'IntersectionObserver' in window) {
     const counterObserver = new IntersectionObserver(entries => entries.forEach(entry => {
       if (entry.isIntersecting) {
         animateNumber(entry.target);
@@ -62,12 +64,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const products = [...document.querySelectorAll('.product')];
   const filterStatus = document.getElementById('filter-status');
   const validFilters = new Set(filters.map(button => button.dataset.filter));
+  let currentFilter = null;
+
   const categoryFromUrl = () => {
     const category = new URLSearchParams(location.search).get('category');
     return category && validFilters.has(category) ? category : 'all';
   };
+
   const applyFilter = (value, updateHistory = false) => {
     const selected = validFilters.has(value) ? value : 'all';
+    const changed = selected !== currentFilter;
     filters.forEach(button => {
       const active = button.dataset.filter === selected;
       button.classList.toggle('active', active);
@@ -80,13 +86,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!hidden) shown += 1;
     });
     if (filterStatus) filterStatus.textContent = `Показано: ${shown}`;
-    if (updateHistory) {
+    if (updateHistory && changed && location.protocol !== 'file:') {
       const url = new URL(location.href);
       if (selected === 'all') url.searchParams.delete('category');
       else url.searchParams.set('category', selected);
       history.pushState({ category: selected }, '', `${url.pathname}${url.search}${url.hash}`);
     }
+    currentFilter = selected;
   };
+
   if (filters.length && products.length) {
     applyFilter(categoryFromUrl());
     filters.forEach(button => button.addEventListener('click', () => applyFilter(button.dataset.filter, true)));
@@ -97,11 +105,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const panel = document.getElementById(button.getAttribute('aria-controls'));
     const open = button.getAttribute('aria-expanded') === 'true';
     button.setAttribute('aria-expanded', String(!open));
-    if (panel) panel.style.maxHeight = open ? '0px' : `${panel.scrollHeight}px`;
+    panel?.classList.toggle('open', !open);
   }));
 
   const line = document.querySelector('.history-line');
-  if (line) {
+  if (line && !reducedMotion) {
     const progress = () => {
       const rect = line.getBoundingClientRect();
       const value = Math.max(0, Math.min(100, ((innerHeight * .55 - rect.top) / rect.height) * 100));
@@ -109,5 +117,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     progress();
     addEventListener('scroll', progress, { passive: true });
+    addEventListener('resize', progress);
+  } else if (line) {
+    line.style.setProperty('--timeline-progress', '100%');
   }
 });
